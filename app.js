@@ -23,6 +23,7 @@
     pill: '<svg viewBox="0 0 24 24"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>',
     crown: '<svg viewBox="0 0 24 24"><path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.3l4.28-3.67a.5.5 0 0 1 .8.52l-2.83 10.24a1 1 0 0 1-.96.73H5.81a1 1 0 0 1-.96-.73L2.02 6.02a.5.5 0 0 1 .8-.52l4.27 3.66a1 1 0 0 0 1.52-.29z"/><path d="M5 21h14"/></svg>',
     truck: '<svg viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2M15 18H9M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>',
+    userplus: '<svg viewBox="0 0 24 24"><circle cx="4" cy="10" r="1.8"/><circle cx="7.6" cy="5" r="1.8"/><circle cx="12.4" cy="5" r="1.8"/><circle cx="16" cy="10" r="1.8"/><path d="M10 11.2c-3 0-5.4 2.6-5.4 5 0 1.8 1.3 2.5 2.7 2.5 1.1 0 1.6-.6 2.7-.6s1.6.6 2.7.6c1.4 0 2.7-.7 2.7-2.5 0-2.4-2.4-5-5.4-5z"/><path d="M20 15v6M17 18h6"/></svg>',
     chev: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>', home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21H3z"/></svg>',
     sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>', moon: '<svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>', auto: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
     repeat: '<svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>'
@@ -100,10 +101,11 @@
     const p = cur(), all = allView();
     const pa = q => q.photo ? `<img src="${q.photo}" alt="">` : I.paw;
     $('#app').innerHTML = `
-      <nav class="pets-bar" aria-label="Meus pets">${db.pets.map(q => `<button class="pp ${!all && db.active === q.id ? 'on' : ''}" data-act="pick" data-id="${q.id}"><span class="pa">${pa(q)}</span>${esc(q.name || 'Pet')}</button>`).join('')}${db.pets.length > 1 ? `<button class="pp ${all ? 'on' : ''}" data-act="pick" data-id="all"><span class="pa">${I.cal}</span>Todos</button>` : ''}<button class="pp add" data-act="addpet" aria-label="Adicionar pet">${I.plus}<span>Adicionar pet</span></button></nav>
+      ${db.pets.length > 1 ? '' : ''}<nav class="pets-bar" aria-label="Meus pets" ${db.pets.length > 1 ? '' : 'hidden'}>${db.pets.map(q => `<button class="pp ${!all && db.active === q.id ? 'on' : ''}" data-act="pick" data-id="${q.id}"><span class="pa">${pa(q)}</span>${esc(q.name || 'Pet')}</button>`).join('')}${db.pets.length > 1 ? `<button class="pp ${all ? 'on' : ''}" data-act="pick" data-id="all"><span class="pa">${I.cal}</span>Todos</button>` : ''}</nav>
       <header class="top">
         ${all ? `<div class="avatar stack">${I.paw}</div>` : `<button class="avatar" data-act="pet" aria-label="Editar perfil de ${esc(p.name)}">${pa(p)}</button>`}
-        <div class="grow"><h1>${all ? 'Todos os pets' : esc(p.name || 'Pet')}</h1><p>${all ? db.pets.length + ' pets · ' + up.length + ' marcações' : esc([p.breed, p.age].filter(Boolean).join(' · ')) || 'Toque na foto para personalizar'}</p></div>
+        <div class="grow"><h1>${all ? 'Todos' : esc(p.name || 'Pet')}</h1><p>${all ? db.pets.length + ' pets · ' + up.length + ' marcações' : esc([p.breed, p.age].filter(Boolean).join(' · ')) || 'Toque na foto para personalizar'}</p></div>
+        <button class="icon-btn" data-act="addpet" aria-label="Adicionar pet" title="Adicionar pet">${I.userplus}</button>
         <button class="icon-btn" data-act="theme" aria-label="Alternar tema claro ou escuro">${document.documentElement.dataset.theme === 'dark' ? I.sun : I.moon}</button>
         <button class="icon-btn" data-act="settings" aria-label="Configurações">${I.gear}</button>
       </header>
@@ -134,7 +136,7 @@
     return list.map(a => { const m = ym(a.date), h = m !== last ? `<div class="mh">${mlabel(m)}</div>` : ''; last = m; return h + card(a, i++); }).join('');
   }
   function hero(a) {
-    if (!a) return `<section class="hero empty"><div class="big">${I.paw}</div><h2>Tudo tranquilo</h2><p>Nenhuma marcação para ${allView() ? 'os pets' : 'o ' + esc(cur().name || 'pet')}.<br>Toque em <b>Nova marcação</b>.</p></section>`;
+    if (!a) return `<section class="hero empty"><div class="big">${I.paw}</div><h2>Tudo tranquilo</h2><p>Nenhuma marcação para ${allView() ? 'os pets' : 'o ' + esc(cur().name || 'pet')}.<br>Toque em <b>+</b> para criar uma.</p></section>`;
     const n = diff(a.date, today()), d = parse(a.date);
     const cnt = n < 0 ? 'Atrasada' : n === 0 ? 'É hoje!' : n === 1 ? 'Amanhã' : `Em ${n} dias`;
     return `<section class="hero" data-act="open" data-id="${a.id}" role="button" tabindex="0" aria-label="Próxima marcação: ${esc(a.type)}">

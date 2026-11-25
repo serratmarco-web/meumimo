@@ -228,3 +228,7 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
 
 .combo { position: relative; } .combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: var(--card); border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.22), inset 0 0 0 1px var(--line); max-height: 220px; overflow: auto; padding: 6px; }
 .co { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 11px 12px; border-radius: 10px; min-height: 44px; font-weight: 500; color: var(--text); } .co:hover, .co.hi { background: var(--g100); } .co.new { color: var(--g600); font-weight: 700; } .co-empty { padding: 12px; color: var(--muted); font-size: 13px; }
+
+.top { gap: 10px; } .top .icon-btn { width: 42px; height: 42px; } .pets-bar[hidden] { display: none; }
+
+[data-act=addpet].icon-btn svg { width: 24px; height: 24px; }
