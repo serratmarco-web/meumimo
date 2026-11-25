@@ -3,6 +3,8 @@
   'use strict';
   const KEY = 'meupet_v1';
   const TYPES = [['Banho', 'drop', 'c1'], ['Tosa', 'cut', 'c2'], ['Banho e tosa', 'spark', 'c3'], ['Veterinário', 'steth', 'c4'], ['Vacina', 'syr', 'c5'], ['Vermífugo / antipulgas', 'pill', 'c6'], ['Outro', 'paw', 'c7']];
+  const SPECIES = ['Cachorro', 'Gato', 'Coelho', 'Hamster', 'Porquinho-da-índia', 'Chinchila', 'Furão', 'Rato (twister)', 'Gerbil', 'Ouriço-pigmeu', 'Calopsita', 'Periquito', 'Agapornis', 'Papagaio', 'Cacatua', 'Canário', 'Pombo', 'Galinha', 'Pato', 'Peixe', 'Peixe beta', 'Kinguio', 'Tartaruga', 'Jabuti', 'Cágado', 'Iguana', 'Lagarto', 'Gecko', 'Cobra', 'Axolote', 'Aranha', 'Cavalo', 'Pônei', 'Porco', 'Cabra', 'Ovelha'];
+  const nz = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const tinfo = t => TYPES.find(x => x[0] === t) || TYPES[6];
   const icoOf = t => I[tinfo(t)[1]];
   const tile = (t, big) => `<span class="tile ${tinfo(t)[2]} ${big ? 'big' : ''}">${icoOf(t)}</span>`;
@@ -39,11 +41,11 @@
 
   const key = a => a.date + ' ' + (a.time || '99:99');
   const CLUB0 = () => ({ active: false, plan: 'Clubinho', price: '', limit: 4, since: '', paid: {} });
-  const PET0 = () => ({ id: uid(), name: '', breed: '', age: '', sex: '', size: '', weight: '', color: '', neutered: false, notes: '', photo: '', club: CLUB0() });
+  const PET0 = () => ({ id: uid(), name: '', species: 'Cachorro', breed: '', age: '', sex: '', size: '', weight: '', color: '', neutered: false, notes: '', photo: '', club: CLUB0() });
   function migrate(d) {
     d = d || {}; d.items = d.items || [];
     if (!d.pets) { const p = Object.assign(PET0(), d.pet || { name: 'Meu pet' }); p.club = Object.assign(CLUB0(), d.club || {}); d.pets = [p]; delete d.pet; delete d.club; }
-    d.pets.forEach(p => { p.club = Object.assign(CLUB0(), p.club || {}); p.club.paid = p.club.paid || {}; });
+    d.pets.forEach(p => { if (p.species === 'Outro') p.species = p.speciesOther || ''; delete p.speciesOther; p.club = Object.assign(CLUB0(), p.club || {}); p.club.paid = p.club.paid || {}; });
     d.items.forEach(a => { if (!a.petId) a.petId = d.pets[0].id; });
     if (!d.active || (d.active !== 'all' && !d.pets.find(p => p.id === d.active)) || (d.active === 'all' && d.pets.length < 2)) d.active = d.pets[0].id;
     return d;
@@ -122,7 +124,8 @@
       <small class="rest">${st[1]}${c.price ? ' · mensalidade ' + money(c.price) : ''}</small></button>`;
   }
   function petChips(p) {
-    const c = [p.sex && ['sex', p.sex], p.size && ['size', 'Porte ' + p.size.toLowerCase()], p.weight && ['kg', p.weight.replace('.', ',') + ' kg'], p.color && ['color', p.color], p.neutered && ['ok', p.sex === 'Fêmea' ? 'Castrada' : 'Castrado']].filter(Boolean);
+    const sp = p.species;
+    const c = [sp && ['sp', sp], p.sex && ['sex', p.sex], p.size && ['size', 'Porte ' + p.size.toLowerCase()], p.weight && ['kg', p.weight.replace('.', ',') + ' kg'], p.color && ['color', p.color], p.neutered && ['ok', p.sex === 'Fêmea' ? 'Castrada' : 'Castrado']].filter(Boolean);
     if (!c.length && !p.notes) return '';
     return `<div class="pchips">${c.map(x => `<span>${esc(x[1])}</span>`).join('')}</div>${p.notes ? `<button class="pnote" data-act="pet">${I.edit}<span>${esc(p.notes)}</span></button>` : ''}`;
   }
@@ -208,13 +211,14 @@
   }
   /* ---------- Perfil do pet (editar / adicionar) ---------- */
   let draft = null, editingId = null, rmArm = false;
-  const FIELDS = f => ({ name: f.name.value.trim(), breed: f.breed.value.trim(), age: f.age.value.trim(), sex: f.sex.value, size: f.size.value, weight: f.weight.value.trim(), color: f.color.value.trim(), neutered: f.neutered.checked, notes: f.notes.value.trim() });
+  const FIELDS = f => ({ name: f.name.value.trim(), species: f.species.value.trim(), breed: f.breed.value.trim(), age: f.age.value.trim(), sex: f.sex.value, size: f.size.value, weight: f.weight.value.trim(), color: f.color.value.trim(), neutered: f.neutered.checked, notes: f.notes.value.trim() });
   const collect = () => { const f = $('#pf'); if (f && draft) Object.assign(draft, FIELDS(f.elements)); };
   function petSheet(id) {
     if (id !== undefined) { editingId = id; draft = id ? Object.assign({}, petById(id)) : PET0(); rmArm = false; }
     const p = draft, isNew = !editingId;
     const s = sheet(`<h3>${isNew ? 'Novo pet' : 'Perfil do pet'}</h3><form id="pf"><div style="display:flex;gap:14px;align-items:center;margin-bottom:14px"><button type="button" class="avatar" data-act="photo" style="width:80px;height:80px">${p.photo ? `<img src="${p.photo}" alt="">` : I.paw}</button><div class="grow" style="flex:1"><button type="button" class="btn soft" data-act="photo">${p.photo ? 'Trocar foto' : 'Adicionar foto'}</button>${p.photo ? ` <button type="button" class="btn soft" data-act="nophoto">Remover</button>` : ''}</div></div>
       <label class="field"><span>Nome</span><input name="name" value="${esc(p.name)}" required autocomplete="off" placeholder="Ex.: Thor"></label>
+      <div class="field combo"><span>Tipo de pet</span><input name="species" id="spIn" value="${esc(p.species || '')}" placeholder="Pesquise: cachorro, gato, coelho…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="spList"><div class="combo-list" id="spList" role="listbox" hidden></div></div>
       <div class="row2"><label class="field"><span>Raça</span><input name="breed" value="${esc(p.breed)}" placeholder="Ex.: Shih-tzu"></label><label class="field"><span>Idade</span><input name="age" value="${esc(p.age || '')}" placeholder="Ex.: 4 anos"></label></div>
       <div class="row2"><label class="field"><span>Sexo</span><select name="sex"><option value="">—</option>${['Macho', 'Fêmea'].map(v => `<option ${p.sex === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label class="field"><span>Porte</span><select name="size"><option value="">—</option>${['Mini', 'Pequeno', 'Médio', 'Grande', 'Gigante'].map(v => `<option ${p.size === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
       <div class="row2"><label class="field"><span>Peso (kg)</span><input name="weight" inputmode="decimal" value="${esc(p.weight || '')}" placeholder="Ex.: 7,5"></label><label class="field"><span>Cor / pelagem</span><input name="color" value="${esc(p.color || '')}" placeholder="Ex.: Branco e caramelo"></label></div>
@@ -223,6 +227,16 @@
       <div class="foot"><button type="button" class="btn soft" data-act="close">Cancelar</button><button class="btn primary">${isNew ? 'Adicionar pet' : 'Salvar'}</button></div></form>
       ${!isNew && db.pets.length > 1 ? `<button type="button" class="btn danger block" style="margin-top:14px" data-act="rmpet">${I.trash} ${rmArm ? 'Toque de novo para confirmar' : 'Remover este pet'}</button>${rmArm ? '<p class="hint" style="margin-top:8px">Isso apaga também todas as marcações dele.</p>' : ''}` : ''}
       <input type="file" id="fphoto" accept="image/*" hidden>`);
+    const inp = $('#spIn', s), list = $('#spList', s); let hi = -1;
+    const show = () => { const q = nz(inp.value.trim()), all = SPECIES.filter(x => !q || nz(x).includes(q)); const exact = SPECIES.some(x => nz(x) === q);
+      const items = all.map(x => `<button type="button" role="option" class="co">${esc(x)}</button>`); if (q && !exact) items.push(`<button type="button" role="option" class="co new" data-v="${esc(inp.value.trim())}">Usar “${esc(inp.value.trim())}”</button>`);
+      list.innerHTML = items.join('') || '<div class="co-empty">Nada encontrado</div>'; list.hidden = false; inp.setAttribute('aria-expanded', 'true'); hi = -1; };
+    const hide = () => { list.hidden = true; inp.setAttribute('aria-expanded', 'false'); };
+    const pickIt = b => { const t = b.textContent; inp.value = b.dataset.v || t; hide(); };
+    inp.addEventListener('focus', show); inp.addEventListener('input', show);
+    list.addEventListener('mousedown', e => e.preventDefault()); list.addEventListener('click', e => { const b = e.target.closest('.co'); if (b) pickIt(b); });
+    inp.addEventListener('blur', () => setTimeout(hide, 120));
+    inp.addEventListener('keydown', e => { const bs = [...list.querySelectorAll('.co')]; if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) show(); hi = Math.min(bs.length - 1, hi + 1); } else if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, hi - 1); } else if (e.key === 'Enter' && !list.hidden && hi >= 0) { e.preventDefault(); pickIt(bs[hi]); return; } else if (e.key === 'Escape') { hide(); return; } else return; bs.forEach((b, k) => b.classList.toggle('hi', k === hi)); if (bs[hi]) bs[hi].scrollIntoView({ block: 'nearest' }); });
     $('#pf', s).addEventListener('submit', e => {
       e.preventDefault(); collect();
       if (!draft.name) { toast('Dê um nome ao pet.'); $('[name=name]', s).focus(); return; }
