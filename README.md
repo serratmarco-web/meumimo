@@ -15,4 +15,13 @@ Ao mudar arquivos, aumente a versão em `sw.js` (`const V = 'meupet-v2'`) para o
 ## Dados
 - Clubinho: toque no card 👑 para informar plano, mensalidade, usos por mês e data da assinatura; marque cada mensalidade como paga.
 - Perfil → **Exportar backup** gera um `.json`; **Importar** restaura em outro aparelho.
+- Carteirinha de vacinação (por pet): vacina, aplicação, próximo reforço, clínica, lote e anexos. Avisa reforço atrasado ou nos próximos 30 dias, e entra no backup.
+- Anexos (fotos e PDFs, até 10 MB cada): no perfil do pet ou em uma marcação. Ficam no aparelho (IndexedDB), não vão para o GitHub.
+- O backup `.json` inclui os anexos. Importar um backup com anexos substitui os atuais; um backup antigo, sem anexos, mantém os atuais.
+- Excluir uma marcação mantém os anexos no perfil do pet. Remover o pet apaga os anexos dele.
+- Limpar os dados do site apaga tudo. Faça backup de vez em quando.
+- Lembrete de backup: aparece se nunca exportou ou após 30 dias. **Depois** adia por 7 dias.
+- Importar um backup pede confirmação e recusa arquivos com identificadores ou datas inválidos.
+- Ao excluir uma marcação, há 7 segundos para **Desfazer**.
+- Na primeira abertura do dia em que houver pendência, um alerta mostra marcações (atrasadas, hoje e amanhã), reforços (atrasados e em até 30 dias) e mensalidades do mês atual e anterior (atrasadas ou a vencer em até 3 dias).
 - Cada aparelho/navegador tem seus próprios dados.

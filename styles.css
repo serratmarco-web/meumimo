@@ -232,3 +232,21 @@ body { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
 .top { gap: 10px; } .top .icon-btn { width: 42px; height: 42px; } .pets-bar[hidden] { display: none; }
 
 [data-act=addpet].icon-btn svg { width: 24px; height: 24px; }
+
+/* Anexos */
+.ax-pet { margin-bottom: 12px; } .ax-add { margin: 0 0 14px; } .ax-back { margin-top: 14px; }
+.ax-sub { display: block; color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.orow[data-ax] .grow { min-width: 0; overflow-wrap: anywhere; }
+.ax-empty { margin-top: 0; text-align: center; }
+.ax-img { display: block; width: 100%; max-height: 52dvh; object-fit: contain; border-radius: 14px; background: var(--g50); margin-bottom: 12px; }
+
+/* Carteirinha de vacinação */
+.vac-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; margin-top: 12px; padding: 14px 16px; border: 0; border-radius: 22px; background: var(--card); box-shadow: var(--sh); }
+.vac-card .grow { flex: 1; min-width: 0; } .vac-card b { display: block; font-size: 15px; } .vac-card small { display: block; color: var(--muted); font-size: 12.5px; }
+.vac-card.late small, .ax-sub.v-late { color: var(--bad); font-weight: 700; } .vac-card.hoje small, .ax-sub.v-hoje { color: #b9770e; font-weight: 700; } .ax-sub.v-ok { color: var(--g600); }
+.v-info { margin: 0 0 14px; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13.5px; } .v-info dt { color: var(--muted); } .v-info dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* Desfazer e lembrete de backup */
+#toast.act { pointer-events: auto; display: flex; align-items: center; gap: 12px; width: max-content; }
+#toast button { border: 0; background: rgba(255,255,255,.18); color: #fff; border-radius: 99px; padding: 0 14px; min-height: 40px; font-weight: 700; flex: none; }
+.install.bk { margin-top: 0; } .install.bk span { flex: 1; } .install.bk button { margin-left: 0; } .install.bk .later { background: transparent; color: var(--info); padding: 8px 4px; }

@@ -26,6 +26,7 @@
     userplus: '<svg viewBox="0 0 24 24"><circle cx="4" cy="10" r="1.8"/><circle cx="7.6" cy="5" r="1.8"/><circle cx="12.4" cy="5" r="1.8"/><circle cx="16" cy="10" r="1.8"/><path d="M10 11.2c-3 0-5.4 2.6-5.4 5 0 1.8 1.3 2.5 2.7 2.5 1.1 0 1.6-.6 2.7-.6s1.6.6 2.7.6c1.4 0 2.7-.7 2.7-2.5 0-2.4-2.4-5-5.4-5z"/><path d="M20 15v6M17 18h6"/></svg>',
     chev: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>', home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21H3z"/></svg>',
     sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>', moon: '<svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>', auto: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+    clip: '<svg viewBox="0 0 24 24"><path d="m21 11-8.9 8.9a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2L9.5 17.3a1.8 1.8 0 0 1-2.6-2.6L15.4 6.2"/></svg>',
     repeat: '<svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>'
   };
   const $ = (s, r = document) => r.querySelector(s);
@@ -42,11 +43,11 @@
 
   const key = a => a.date + ' ' + (a.time || '99:99');
   const CLUB0 = () => ({ active: false, plan: 'Clubinho', price: '', limit: 4, since: '', paid: {} });
-  const PET0 = () => ({ id: uid(), name: '', species: 'Cachorro', breed: '', age: '', sex: '', size: '', weight: '', color: '', neutered: false, notes: '', photo: '', club: CLUB0() });
+  const PET0 = () => ({ id: uid(), name: '', species: 'Cachorro', breed: '', age: '', sex: '', size: '', weight: '', color: '', neutered: false, notes: '', photo: '', club: CLUB0(), vaccines: [] });
   function migrate(d) {
     d = d || {}; d.items = d.items || [];
     if (!d.pets) { const p = Object.assign(PET0(), d.pet || { name: 'Meu pet' }); p.club = Object.assign(CLUB0(), d.club || {}); d.pets = [p]; delete d.pet; delete d.club; }
-    d.pets.forEach(p => { if (p.species === 'Outro') p.species = p.speciesOther || ''; delete p.speciesOther; p.club = Object.assign(CLUB0(), p.club || {}); p.club.paid = p.club.paid || {}; });
+    d.pets.forEach(p => { if (p.species === 'Outro') p.species = p.speciesOther || ''; delete p.speciesOther; p.club = Object.assign(CLUB0(), p.club || {}); p.club.paid = p.club.paid || {}; p.vaccines = p.vaccines || []; });
     d.items.forEach(a => { if (!a.petId) a.petId = d.pets[0].id; });
     if (!d.active || (d.active !== 'all' && !d.pets.find(p => p.id === d.active)) || (d.active === 'all' && d.pets.length < 2)) d.active = d.pets[0].id;
     return d;
@@ -81,6 +82,10 @@
   function setTheme(t) { try { localStorage.setItem('meupet_theme', t); } catch (e) { } applyTheme(); }
   if (mq) (mq.addEventListener ? mq.addEventListener('change', applyTheme) : mq.addListener(applyTheme));
   let tab = 'prox';
+  // Reserva: evita quebrar o app se o cache ainda não tiver o anexos.js.
+  const none = () => Promise.reject(new Error('anexos indisponíveis'));
+  const AX = window.MMAnexos || { init: () => Promise.resolve(), ofPet: () => [], ofItem: () => [], show: () => toast('Feche e abra o app para usar os anexos.'), movePet: none, unlink: none, removePet: none, exportFiles: none, importFiles: none };
+  const axCount = n => n ? ` (${n})` : '';
   const upcoming = () => inView().filter(a => !a.done).sort((a, b) => key(a).localeCompare(key(b)));
   const history = () => inView().filter(a => a.done).sort((a, b) => key(b).localeCompare(key(a)));
 
@@ -92,7 +97,21 @@
     if (n === 1) return ['amanha', 'Amanhã'];
     return ['', `Em ${n} dias`];
   }
-  function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('in'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('in'), 2600); }
+  function toast(t, undo) {
+    const el = $('#toast'); el.textContent = t; el.classList.toggle('act', !!undo);
+    const hide = () => el.classList.remove('in', 'act');
+    if (undo) { const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Desfazer'; b.onclick = () => { clearTimeout(toast.t); hide(); undo(); }; el.appendChild(b); }
+    el.classList.add('in'); clearTimeout(toast.t); toast.t = setTimeout(hide, undo ? 7000 : 2600);
+  }
+
+  /* ---------- Lembrete de backup ---------- */
+  const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } } };
+  function backupNote() {
+    const hasData = db.items.length || db.pets.some(p => p.vaccines.length) || db.pets.some(p => AX.ofPet(p.id).length);
+    const last = store.get('meupet_backup');
+    if (!hasData || store.get('meupet_snooze') > today() || (last && diff(today(), last) < 30)) return '';
+    return `<div class="install bk">${I.up}<span>${last ? `Último backup há ${diff(today(), last)} dias` : 'Você ainda não fez backup'}</span><button data-act="export">Fazer</button><button class="later" data-act="snooze">Depois</button></div>`;
+  }
 
   /* ---------- Tela principal ---------- */
   let deferred = null;
@@ -111,8 +130,10 @@
       </header>
       ${all ? '' : petChips(p)}
       ${deferred ? `<div class="install">${I.down}<span>Instale o app na tela inicial</span><button data-act="install">Instalar</button></div>` : ''}
+      ${backupNote()}
       ${hero(next)}
       ${all ? '' : clubCard()}
+      ${all ? '' : vacCard()}
       <div class="tabs" role="tablist"><button role="tab" class="${tab === 'prox' ? 'on' : ''}" data-tab="prox" aria-selected="${tab === 'prox'}">Próximas (${up.length})</button><button role="tab" class="${tab === 'hist' ? 'on' : ''}" data-tab="hist" aria-selected="${tab === 'hist'}">Histórico (${history().length})</button></div>
       <div class="list">${list.length ? grouped(list) : `<div class="empty-s">${I.cal}<p>${tab === 'prox' ? 'Nenhuma marcação ainda.<br>Toque em <b>+</b> para começar.' : 'O histórico aparece aqui quando você concluir marcações.'}</p></div>`}</div>
       <button class="fab" data-act="new" aria-label="Nova marcação" title="Nova marcação">${I.plus}</button>`;
@@ -124,6 +145,88 @@
     return `<button class="club" data-act="club"><div class="club-top"><span class="cr">${I.crown}</span><span class="grow"><b>${esc(c.plan || 'Clubinho')}</b><small>${c.since ? 'Assinante desde ' + fshort(c.since) + ' · vence dia ' + c.since.slice(8) : 'Defina a data da assinatura'}</small></span><span class="pay ${st[0]}">${st[0] === 'ok' ? I.check.replace('<svg', '<svg style="width:14px;height:14px"') : ''}${st[0] === 'ok' ? 'Pago' : st[0] === 'late' ? 'Atrasado' : 'Pendente'}</span></div>
       <div class="club-mid"><span>${mlabel(m)}</span><b>${use.length}${lim ? ' de ' + lim : ''} ${use.length === 1 ? 'uso' : 'usos'}</b></div>${lim && lim <= 12 ? `<div class="dots" aria-hidden="true">${Array.from({ length: Math.max(lim, use.length) }, (_, k) => `<i class="${k < use.length ? 'on' : ''} ${k >= lim ? 'over' : ''}"></i>`).join('')}</div>` : lim ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}${lim ? `<small class="rest">${use.length >= lim ? (use.length > lim ? `${use.length - lim} acima do plano` : 'Plano do mês completo') : `Restam ${lim - use.length} no mês`}</small>` : ''}
       <small class="rest">${st[1]}${c.price ? ' · mensalidade ' + money(c.price) : ''}</small></button>`;
+  }
+  /* ---------- Carteirinha de vacinação ---------- */
+  const VACS = { Cachorro: ['V8', 'V10', 'Antirrábica', 'Gripe canina', 'Giárdia', 'Leishmaniose'], Gato: ['V3', 'V4', 'V5', 'Antirrábica', 'FeLV'] };
+  const vacSort = p => p.vaccines.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  // Só a aplicação mais recente de cada vacina define o status; as anteriores são histórico.
+  const vacLatest = p => { const seen = new Set(); return vacSort(p).filter(v => { const k = nz(v.name).trim(); if (seen.has(k)) return false; seen.add(k); return true; }); };
+  function vacState(v) {
+    if (!v.next) return ['', 'Sem reforço informado'];
+    const n = diff(v.next, today());
+    if (n < 0) return ['late', 'Reforço atrasado desde ' + fshort(v.next)];
+    if (n <= 30) return ['hoje', n === 0 ? 'Reforço é hoje' : `Reforço em ${n} dia${n === 1 ? '' : 's'}`];
+    return ['ok', 'Próximo reforço ' + fshort(v.next)];
+  }
+  function vacCard() {
+    const p = cur(), last = vacLatest(p), st = last.map(vacState);
+    const late = st.filter(s => s[0] === 'late').length, soon = st.filter(s => s[0] === 'hoje').length;
+    const nx = last.filter(v => v.next && v.next >= today()).sort((a, b) => a.next.localeCompare(b.next))[0];
+    const txt = !last.length ? 'Registre as vacinas aplicadas' : late ? `${late} reforço${late > 1 ? 's' : ''} atrasado${late > 1 ? 's' : ''}` : soon ? `${soon} reforço${soon > 1 ? 's' : ''} nos próximos 30 dias` : nx ? `Próximo: ${esc(nx.name)} em ${fshort(nx.next)}` : p.vaccines.length + (p.vaccines.length > 1 ? ' registros' : ' registro');
+    return `<button class="vac-card ${late ? 'late' : soon ? 'hoje' : ''}" data-act="vaccard"><span class="tile c5 big">${I.syr}</span><span class="grow"><b>Carteirinha de vacinação</b><small>${txt}</small></span>${I.chev}</button>`;
+  }
+  function vacSheet() {
+    const p = cur(), latest = new Set(vacLatest(p).map(v => v.id));
+    sheet(`<h3>Carteirinha de vacinação</h3><p class="hint">${esc(p.name || 'Pet')}</p>
+      <button type="button" class="btn primary block lg" data-act="vacnew">${I.plus} Registrar vacina</button>
+      ${p.vaccines.length ? `<div class="olist">${vacSort(p).map(v => { const s = latest.has(v.id) ? vacState(v) : ['', 'Histórico'], n = AX.ofItem(v.id).length; return `<button type="button" class="orow" data-act="vacopen" data-id="${esc(v.id)}"><span class="oi">${I.syr}</span><span class="grow">${esc(v.name)}<small class="ax-sub">Aplicada em ${fshort(v.date)}${v.vet ? ' · ' + esc(v.vet) : ''}${n ? ` · ${n} anexo${n > 1 ? 's' : ''}` : ''}</small><small class="ax-sub v-${s[0]}">${s[1]}</small></span>${I.chev}</button>`; }).join('')}</div>` : '<p class="hint ax-empty">Nenhuma vacina registrada.</p>'}
+      <button type="button" class="btn soft block ax-back" data-act="close">Fechar</button>`);
+  }
+  const getVac = id => cur().vaccines.find(v => v.id === id);
+  function vacOptions(id) {
+    const v = getVac(id); if (!v) return;
+    const row = (act, ic, label, cls = '') => `<button class="orow ${cls}" data-act="${act}" data-id="${esc(v.id)}"><span class="oi">${ic}</span><span class="grow">${label}</span>${I.chev}</button>`;
+    const info = [['Aplicada em', fshort(v.date)], ['Próximo reforço', v.next && fshort(v.next)], ['Veterinário / clínica', v.vet], ['Lote', v.lot], ['Observações', v.note]].filter(x => x[1]);
+    sheet(`<div class="o-head">${tile('Vacina', 1)}<div><h3>${esc(v.name)}</h3><p>${esc(cur().name || 'Pet')}</p></div></div>
+      <dl class="v-info">${info.map(x => `<dt>${x[0]}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
+      <div class="olist">${row('vacfiles', I.clip, 'Selo e comprovantes' + axCount(AX.ofItem(v.id).length))}${row('vacedit', I.edit, 'Editar')}${v.next && v.next >= today() ? row('vacics', I.cal, 'Reforço no calendário') : ''}${row('vacdel', I.trash, '<span>Excluir</span>', 'danger')}</div>
+      <button type="button" class="btn soft block ax-back" data-act="vaccard">Voltar</button>`);
+  }
+  function vacForm(v, preset) {
+    const p = cur(), x = v || Object.assign({ name: '', date: today(), next: '', vet: '', lot: '', note: '' }, preset);
+    const s = sheet(`<h3>${v ? 'Editar vacina' : 'Registrar vacina'}</h3><form id="vf" novalidate>
+      <label class="field"><span>Vacina</span><input name="name" value="${esc(x.name)}" list="vacList" autocomplete="off" placeholder="Ex.: Antirrábica"></label>
+      <datalist id="vacList">${(VACS[p.species] || ['Antirrábica']).map(n => `<option value="${n}"></option>`).join('')}</datalist>
+      <div class="row2"><label class="field"><span>Aplicada em</span><input type="date" name="date" value="${esc(x.date)}" max="${today()}"></label><label class="field"><span>Próximo reforço</span><input type="date" name="next" value="${esc(x.next)}"></label></div>
+      <p class="hint">Use a data de reforço indicada pelo veterinário.</p>
+      <label class="field"><span>Veterinário / clínica (opcional)</span><input name="vet" value="${esc(x.vet)}"></label>
+      <label class="field"><span>Lote (opcional)</span><input name="lot" value="${esc(x.lot)}" autocomplete="off"></label>
+      <label class="field"><span>Observações</span><textarea name="note" rows="2">${esc(x.note)}</textarea></label>
+      <div class="foot"><button type="button" class="btn soft" data-act="vaccard">Cancelar</button><button class="btn primary">${I.check} Salvar</button></div></form>`);
+    $('#vf', s).addEventListener('submit', e => {
+      e.preventDefault(); const f = e.target.elements;
+      const o = { name: f.name.value.trim(), date: f.date.value, next: f.next.value, vet: f.vet.value.trim(), lot: f.lot.value.trim(), note: f.note.value.trim() };
+      if (!o.name) { toast('Informe a vacina.'); return; }
+      if (!o.date || o.date > today()) { toast('Informe a data em que foi aplicada.'); return; }
+      if (o.next && o.next <= o.date) { toast('O reforço deve ser depois da aplicação.'); return; }
+      // Altera o próprio array: o rascunho do perfil compartilha a mesma lista.
+      if (v) Object.assign(v, o); else p.vaccines.push(Object.assign({ id: uid() }, o));
+      save(); render(); vacSheet(); toast('Vacina salva.');
+    });
+  }
+  let vacArm = '';
+
+  /* ---------- Alerta na abertura (uma vez por dia) ---------- */
+  function alerts() {
+    const out = [], add = (rank, p, ic, title, text, tone) => out.push({ rank, p, ic, title, text, tone });
+    db.items.filter(a => !a.done && diff(a.date, today()) <= 1).sort((a, b) => key(a).localeCompare(key(b))).forEach(a => {
+      const w = when(a); add(w[0] === 'late' ? 0 : 1, petById(a.petId), icoOf(a.type), a.type, w[1], w[0]);
+    });
+    db.pets.forEach(p => {
+      vacLatest(p).filter(v => v.next && diff(v.next, today()) <= 30).forEach(v => { const st = vacState(v); add(st[0] === 'late' ? 0 : 2, p, I.syr, v.name, st[1], st[0]); });
+      const c = p.club; if (!c.active || !c.since) return;
+      clubMonths(p).slice(0, 2).forEach(m => {
+        const st = payState(m, p), n = diff(dueOf(m, p), today());
+        if (st[0] === 'late' || (st[0] === 'pend' && n <= 3)) add(st[0] === 'late' ? 0 : 1, p, I.crown, `${c.plan || 'Clubinho'} · ${mlabel(m)}`, st[1], st[0] === 'late' ? 'late' : 'hoje');
+      });
+    });
+    return out.sort((a, b) => a.rank - b.rank);
+  }
+  function openAlert() {
+    if (document.querySelector('.scrim') || store.get('meupet_alert') === today()) return;
+    const l = alerts(); if (!l.length) return;
+    store.set('meupet_alert', today());
+    sheet(`<h3>Atenção</h3><p class="hint">Atrasados e próximos</p><div class="olist">${l.map(x => `<button type="button" class="orow" data-act="goto" data-id="${x.p.id}"><span class="oi">${x.ic}</span><span class="grow">${esc(x.title)}<small class="ax-sub">${esc(x.p.name || 'Pet')}</small><small class="ax-sub v-${x.tone}">${esc(x.text)}</small></span>${I.chev}</button>`).join('')}</div><button type="button" class="btn primary block ax-back" data-act="close">Entendi</button>`);
   }
   function petChips(p) {
     const sp = p.species;
@@ -148,7 +251,7 @@
   function clubPos(a) { const pp = petById(a.petId), u = clubUse(ym(a.date), pp), i = u.findIndex(x => x.id === a.id), lim = Number(pp.club.limit) || 0; return i < 0 ? '' : ` ${i + 1}${lim ? '/' + lim : ''} do mês`; }
   function card(a, i) {
     const w = when(a), d = parse(a.date), tone = a.done ? 'done' : w ? (w[0] || 'soon') : '';
-    const chips = [allView() ? `<span class="chip pet-chip">${I.paw} ${esc(petById(a.petId).name)}</span>` : '', a.taxi ? `<span class="chip taxi-chip">${I.truck} Táxi Dog${a.taxiPrice ? ' · ' + money(a.taxiPrice) : ''}</span>` : '', a.club ? `<span class="chip club-chip">${I.crown} Clubinho${clubPos(a)}</span>` : '', a.repeat ? `<span class="chip">${I.repeat.replace('<svg', '<svg style="width:12px;height:12px"')} ${a.repeat} dias</span>` : '', a.price ? `<span class="chip">${money(a.price)}</span>` : ''].join('');
+    const chips = [allView() ? `<span class="chip pet-chip">${I.paw} ${esc(petById(a.petId).name)}</span>` : '', a.taxi ? `<span class="chip taxi-chip">${I.truck} Táxi Dog${a.taxiPrice ? ' · ' + money(a.taxiPrice) : ''}</span>` : '', a.club ? `<span class="chip club-chip">${I.crown} Clubinho${clubPos(a)}</span>` : '', a.repeat ? `<span class="chip">${I.repeat.replace('<svg', '<svg style="width:12px;height:12px"')} ${a.repeat} dias</span>` : '', a.price ? `<span class="chip">${money(a.price)}</span>` : '', AX.ofItem(a.id).length ? `<span class="chip">${I.clip} ${AX.ofItem(a.id).length}</span>` : ''].join('');
     return `<article class="item ${tone}" style="animation-delay:${Math.min(i, 8) * 40}ms">
       <div class="dt" data-act="open" data-id="${a.id}"><small>${WD[d.getDay()]}</small><b>${d.getDate()}</b></div>
       <div class="body" data-act="open" data-id="${a.id}"><b class="ttl">${tile(a.type)}${esc(a.type)}</b>
@@ -186,6 +289,7 @@
       if (!f.date.value) { toast('Escolha a data.'); f.date.focus(); return; }
       const o = { type, date: f.date.value, time: f.time.value, place: f.place.value.trim(), price: f.price.value.trim(), note: f.note.value.trim(), repeat: f.repeat.value ? Number(f.repeat.value) : '', petId: f.pet ? f.pet.value : pid, club: !!(f.club.checked && petById(f.pet ? f.pet.value : pid).club.active), taxi: f.taxi.checked, taxiPrice: f.taxi.checked ? f.taxiPrice.value.trim() : '' };
       if (a) Object.assign(a, o); else db.items.push(Object.assign({ id: uid(), done: false }, o));
+      if (a) AX.movePet(a.id, o.petId).then(render).catch(() => { });
       save(); close(); render(); toast(a ? 'Marcação atualizada.' : 'Marcação salva!');
     });
   }
@@ -193,7 +297,7 @@
     const row = (act, ic, label, cls = '') => `<button class="orow ${cls}" data-act="${act}" data-id="${a.id}"><span class="oi">${ic}</span><span class="grow">${label}</span>${I.chev}</button>`;
     sheet(`<div class="o-head">${tile(a.type, 1)}<div><h3>${esc(a.type)}</h3><p>${fdate(a.date)}${a.time ? ' às ' + a.time : ''}${a.place ? ' · ' + esc(a.place) : ''}</p></div></div>
       ${a.done ? '' : `<button class="btn primary block lg" data-act="done" data-id="${a.id}">${I.check} Marcar como concluída</button>`}
-      <div class="olist">${a.done ? row('undo', I.repeat, 'Reabrir marcação') : ''}${row('edit', I.edit, 'Editar')}${row('ics', I.cal, 'Adicionar ao calendário')}${row('del', I.trash, 'Excluir', 'danger')}</div>`);
+      <div class="olist">${a.done ? row('undo', I.repeat, 'Reabrir marcação') : ''}${row('edit', I.edit, 'Editar')}${row('files', I.clip, 'Receitas e anexos' + axCount(AX.ofItem(a.id).length))}${row('ics', I.cal, 'Adicionar ao calendário')}${row('del', I.trash, 'Excluir', 'danger')}</div>`);
   }
   function clubSheet() {
     const c = cur().club;
@@ -226,8 +330,9 @@
       <div class="row2"><label class="field"><span>Peso (kg)</span><input name="weight" inputmode="decimal" value="${esc(p.weight || '')}" placeholder="Ex.: 7,5"></label><label class="field"><span>Cor / pelagem</span><input name="color" value="${esc(p.color || '')}" placeholder="Ex.: Branco e caramelo"></label></div>
       <label class="swrow"><input type="checkbox" name="neutered" ${p.neutered ? 'checked' : ''}><span class="sw-t">${I.check}<em>Castrado(a)</em></span><i class="sw"></i></label>
       <label class="field"><span>Observações</span><textarea name="notes" rows="3" placeholder="Alergias, cuidados, medos, comportamento, veterinário de confiança…">${esc(p.notes || '')}</textarea></label>
+      ${isNew ? '' : `<button type="button" class="btn soft block ax-pet" data-act="petfiles">${I.clip} Receitas e documentos${axCount(AX.ofPet(editingId).length)}</button>`}
       <div class="foot"><button type="button" class="btn soft" data-act="close">Cancelar</button><button class="btn primary">${isNew ? 'Adicionar pet' : 'Salvar'}</button></div></form>
-      ${!isNew && db.pets.length > 1 ? `<button type="button" class="btn danger block" style="margin-top:14px" data-act="rmpet">${I.trash} ${rmArm ? 'Toque de novo para confirmar' : 'Remover este pet'}</button>${rmArm ? '<p class="hint" style="margin-top:8px">Isso apaga também todas as marcações dele.</p>' : ''}` : ''}
+      ${!isNew && db.pets.length > 1 ? `<button type="button" class="btn danger block" style="margin-top:14px" data-act="rmpet">${I.trash} ${rmArm ? 'Toque de novo para confirmar' : 'Remover este pet'}</button>${rmArm ? '<p class="hint" style="margin-top:8px">Isso apaga também as marcações, vacinas e anexos dele.</p>' : ''}` : ''}
       <input type="file" id="fphoto" accept="image/*" hidden>`);
     const inp = $('#spIn', s), list = $('#spList', s); let hi = -1;
     const show = () => { const q = nz(inp.value.trim()), all = SPECIES.filter(x => !q || nz(x).includes(q)); const exact = SPECIES.some(x => nz(x) === q);
@@ -253,7 +358,58 @@
       <div class="sec">Aparência</div><div class="seg" role="group" aria-label="Tema">${[['light', 'Claro', I.sun], ['dark', 'Escuro', I.moon], ['auto', 'Automático', I.auto]].map(([v, l, ic]) => `<button type="button" class="${getTheme() === v ? 'on' : ''}" data-act="setTheme" data-id="${v}" aria-pressed="${getTheme() === v}">${ic}${l}</button>`).join('')}</div>
       <div class="sec">Seus dados</div><div class="actions"><button class="btn soft" data-act="export">${I.up} Exportar backup (.json)</button><button class="btn soft" data-act="import">${I.down} Importar backup</button></div>
       <p style="color:var(--muted);font-size:12.5px;margin:12px 2px 0">Os dados ficam só neste aparelho. Faça um backup de vez em quando.</p><input type="file" id="fimp" accept="application/json,.json" hidden>`);
-    $('#fimp', s).addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(t => { try { const d = JSON.parse(t); if (!d.items || !(d.pet || d.pets)) throw 0; db = migrate(d); save(); close(); render(); toast('Backup importado.'); } catch (x) { toast('Arquivo inválido.'); } }); });
+    $('#fimp', s).addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(importBackup).catch(() => toast('Arquivo inválido.')); });
+  }
+  /* Valida o que vem de fora: parte desses campos entra direto no HTML. Altera d e lança erro se for inválido. */
+  function sanitize(d) {
+    const must = ok => { if (!ok) throw new Error('backup inválido'); };
+    const isId = v => typeof v === 'string' && /^[a-z0-9]+$/i.test(v);
+    const isDate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const date = v => isDate(v) ? v : '';
+    const str = v => v == null ? '' : String(v);
+    const plain = v => str(v).replace(/[<>"'&]/g, '');
+    must(Array.isArray(d.items) && Array.isArray(d.pets) && d.pets.length);
+    d.pets.forEach(p => {
+      must(p && isId(p.id));
+      ['name', 'species', 'breed', 'age', 'sex', 'size', 'weight', 'color', 'notes'].forEach(k => { p[k] = str(p[k]); });
+      p.photo = /^data:image\/(jpeg|png|webp|gif);base64,[a-z0-9+/=]+$/i.test(p.photo) ? p.photo : '';
+      const c = p.club; c.plan = str(c.plan); c.price = plain(c.price); c.limit = Number(c.limit) || 0; c.since = date(c.since);
+      c.paid = Object.fromEntries(Object.entries(c.paid || {}).filter(([m, v]) => /^\d{4}-\d{2}$/.test(m) && isDate(v)));
+      must(Array.isArray(p.vaccines));
+      p.vaccines.forEach(v => { must(v && isId(v.id) && isDate(v.date)); v.next = date(v.next); ['name', 'vet', 'lot', 'note'].forEach(k => { v[k] = str(v[k]); }); });
+    });
+    d.items.forEach(x => {
+      must(x && isId(x.id) && isId(x.petId) && isDate(x.date));
+      x.time = /^\d{2}:\d{2}(:\d{2})?$/.test(x.time) ? x.time : '';
+      x.repeat = Number(x.repeat) || '';
+      x.type = str(x.type); x.place = str(x.place); x.note = str(x.note); x.price = plain(x.price); x.taxiPrice = plain(x.taxiPrice);
+    });
+    if (d.active !== 'all' && !isId(d.active)) d.active = d.pets[0].id;
+    return d;
+  }
+  async function importBackup(t) {
+    const raw = JSON.parse(t); if (!raw.items || !(raw.pet || raw.pets)) throw 0;
+    const files = raw.files; delete raw.files; // anexos vão para o IndexedDB, nunca para o localStorage
+    const d = sanitize(migrate(raw));
+    const count = x => `${x.pets.length} pet(s), ${x.items.length} marcação(ões), ${x.pets.reduce((n, p) => n + p.vaccines.length, 0)} vacina(s)`;
+    const s = sheet(`<h3>Importar backup?</h3>
+      <dl class="v-info"><dt>No arquivo</dt><dd>${count(d)}${Array.isArray(files) ? `, ${files.length} anexo(s)` : ''}</dd><dt>No aparelho</dt><dd>${count(db)}</dd></dl>
+      <p class="hint">${Array.isArray(files) ? 'Os dados e os anexos deste aparelho serão substituídos.' : 'Os dados deste aparelho serão substituídos. Este backup não tem anexos, então os atuais são mantidos.'}</p>
+      <div class="foot"><button type="button" class="btn soft" data-act="close">Cancelar</button><button type="button" class="btn danger" id="impOk">Substituir</button></div>`);
+    $('#impOk', s).addEventListener('click', async e => {
+      e.target.disabled = true;
+      // Backup antigo (sem "files") não mexe nos anexos atuais.
+      if (Array.isArray(files)) { try { await AX.importFiles(files); } catch (x) { close(); toast('Falha nos anexos. Nada foi importado.'); return; } }
+      db = d; save(); close(); render(); toast('Backup importado.');
+    });
+  }
+  async function exportBackup() {
+    let files; try { files = await AX.exportFiles(); } catch (e) { }
+    try {
+      download(`meupet-backup-${today()}.json`, JSON.stringify(files ? Object.assign({}, db, { files }) : db, null, 1), 'application/json');
+      toast(files ? 'Backup exportado.' : 'Backup exportado SEM os anexos.');
+      if (files) { store.set('meupet_backup', today()); render(); }
+    } catch (e) { toast('Não foi possível gerar o backup.'); }
   }
   const img = (file, max) => new Promise(res => { const r = new FileReader(); r.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = im.width * k; c.height = im.height * k; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', .85)); }; im.src = r.result; }; r.readAsDataURL(file); });
   const download = (name, text, type) => { const u = URL.createObjectURL(new Blob([text], { type })), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000); };
@@ -271,18 +427,39 @@
     setTheme: v => { setTheme(v); settingsSheet(); render(); },
     settings: settingsSheet, addpet: () => petSheet(null), editpet: id => petSheet(id),
     pick: id => { db.active = id; tab = 'prox'; save(); render(); window.scrollTo({ top: 0 }); },
-    rmpet: () => { if (!rmArm) { rmArm = true; collect(); petSheet(); return; } const id = editingId; db.pets = db.pets.filter(q => q.id !== id); db.items = db.items.filter(a => a.petId !== id); db = migrate(db); save(); close(); render(); toast('Pet removido.'); },
+    rmpet: () => { if (!rmArm) { rmArm = true; collect(); petSheet(); return; } const id = editingId; db.pets = db.pets.filter(q => q.id !== id); db.items = db.items.filter(a => a.petId !== id); db = migrate(db); save(); close(); render(); toast('Pet removido.'); AX.removePet(id).catch(() => { }); },
     new: () => form(), club: clubSheet,
     pay: m => { const pd = cur().club.paid; if (pd[m]) delete pd[m]; else pd[m] = today(); save(); clubSheet(); render(); toast(pd[m] ? 'Mensalidade marcada como paga.' : 'Pagamento desfeito.'); }, close, pet: () => petSheet(cur().id), photo: () => $('#fphoto').click(), nophoto: () => { collect(); draft.photo = ''; petSheet(); }, import: () => $('#fimp').click(),
-    export: () => { download(`meupet-backup-${today()}.json`, JSON.stringify(db, null, 1), 'application/json'); toast('Backup exportado.'); },
+    export: exportBackup,
+    snooze: () => { store.set('meupet_snooze', addDays(today(), 7)); render(); },
+    goto: id => { db.active = id; tab = 'prox'; save(); close(); render(); window.scrollTo({ top: 0 }); },
+    vaccard: () => { vacArm = ''; vacSheet(); }, vacnew: () => vacForm(), vacopen: id => { vacArm = ''; vacOptions(id); }, vacedit: id => vacForm(getVac(id)),
+    vacfiles: id => { const v = getVac(id); AX.show({ petId: cur().id, itemId: id, kind: 'Vacina', title: `${v.name} · ${fshort(v.date)}`, back: () => vacOptions(id) }); },
+    vacics: id => { const v = getVac(id); ics({ id: v.id, type: 'Vacina ' + v.name, date: v.next, time: '09:00', petId: cur().id }); toast('Abra o arquivo para salvar no calendário.'); },
+    vacdel: id => {
+      if (vacArm !== id) { vacArm = id; $('[data-act=vacdel] .grow span').textContent = 'Toque de novo para confirmar'; return; }
+      const l = cur().vaccines, i = l.findIndex(v => v.id === id), kept = AX.ofItem(id).length; if (i >= 0) l.splice(i, 1);
+      vacArm = ''; save(); render(); vacSheet(); toast(kept ? 'Excluída. Anexos mantidos no perfil do pet.' : 'Vacina excluída.'); if (kept) AX.unlink(id).catch(() => { });
+    },
+    files: id => { const a = get(id); AX.show({ petId: a.petId, itemId: id, title: `${a.type} · ${fdate(a.date)}`, back: () => options(a) }); },
+    petfiles: () => { collect(); AX.show({ petId: editingId, itemId: '', title: petById(editingId).name || 'Pet', back: () => petSheet() }); },
     open: id => { const a = get(id); if (a) options(a); }, edit: id => form(get(id)),
     ics: id => { ics(get(id)); close(); toast('Abra o arquivo para salvar no calendário.'); },
-    del: id => { db.items = db.items.filter(x => x.id !== id); save(); close(); render(); toast('Marcação excluída.'); },
+    // Os anexos não são desvinculados: sem a marcação, aparecem no perfil do pet e voltam junto no desfazer.
+    del: id => {
+      const item = get(id), kept = AX.ofItem(id).length; db.items = db.items.filter(x => x.id !== id); save(); close(); render();
+      toast(kept ? 'Excluída. Anexos mantidos no perfil.' : 'Marcação excluída.', () => {
+        if (get(id) || !db.pets.some(q => q.id === item.petId)) return;
+        db.items.push(item); save(); render(); toast('Marcação restaurada.');
+      });
+    },
     undo: id => { get(id).done = false; save(); close(); render(); },
     done: id => {
       const a = get(id); a.done = true; a.doneAt = new Date().toISOString(); let msg = 'Concluída! 🎉';
       if (a.repeat) { const nd = addDays(today() > a.date ? today() : a.date, a.repeat); db.items.push({ id: uid(), type: a.type, date: nd, time: a.time, place: a.place, price: a.price, note: a.note, petId: a.petId, repeat: a.repeat, club: a.club, taxi: a.taxi, taxiPrice: a.taxiPrice, done: false }); msg = `Concluída! Próxima marcada para ${fdate(nd)}.`; }
       save(); close(); render(); toast(msg);
+      // Vacina concluída: oferece o registro na carteirinha (dá para cancelar).
+      if (a.type === 'Vacina') { db.active = a.petId; save(); render(); vacForm(null, { date: a.date < today() ? a.date : today(), vet: a.place }); }
     },
     install: () => { if (deferred) { deferred.prompt(); deferred.userChoice.finally(() => { deferred = null; render(); }); } }
   };
@@ -294,8 +471,9 @@
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.hero[data-act]')) { e.preventDefault(); ACT.open(e.target.dataset.id); } });
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; render(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('.scrim')) render(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !document.querySelector('.scrim')) { render(); openAlert(); } });
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
   applyTheme();
   render();
+  AX.init({ sheet, toast, esc, uid, today, fshort, fdate, I, download, onChange: render, itemLabel: id => { const a = get(id); if (a) return `${a.type} · ${fdate(a.date)}`; const v = db.pets.flatMap(p => p.vaccines).find(x => x.id === id); return v ? `Vacina ${v.name} · ${fshort(v.date)}` : ''; } }).then(() => { render(); openAlert(); });
 })();
